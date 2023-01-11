@@ -1,0 +1,18 @@
+{
+  "name": "genyow",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Thanatoslayer6",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.2.2",
+    "axios-cookiejar-support": "^4.0.6",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.0.3"
+  }
+}
