@@ -14,7 +14,7 @@ class Genyo {
     #password; 
 
     constructor(userid, password) {
-        this.completedTasksCount = null;
+        this.currentTasksCount = null;
         this.completedTasksCount = null;
         this.expiredTasksCount = null;
         this.upcomingTasksCount = null;
@@ -77,6 +77,9 @@ class Genyo {
 
     // Scrapes total tasks count of 'completed', 'expired', 'upcoming', 'favorite' from html 
     #scrapeTotalTasksCount() {
+        if (!this.currentTasksCount) {
+            this.currentTasksCount = Number(this.#$('#ctl00_MainContent_lkbtncurrent h3').text())
+        }
         if (!this.completedTasksCount) {
             this.completedTasksCount = Number(this.#$('#ctl00_MainContent_lkbtnCompleted h3').text())
         }
@@ -99,6 +102,21 @@ class Genyo {
         if (!this.messagesCount) {
             this.messagesCount = Number(this.#$('.spanEdupostCount').text()?.slice(1, -1)) || 0
         }
+    }
+    
+    // Private method used when getting all of tasks for a certain endpoint
+    async #concurrentRequests(endpoint, maxPage) {
+        let requests = []
+        for (let i = 1; i <= maxPage; i++) { 
+            requests.push(
+                this.client.post(endpoint,
+                new URLSearchParams({
+                    '__EVENTTARGET': 'ctl00$MainContent$pager2',
+                    '__EVENTARGUMENT': i,
+                }))
+            )
+        }
+        return await Promise.all(requests) // Return the results -> '?.data' for html
     }
 
     async getHomepage() {
@@ -130,36 +148,109 @@ class Genyo {
             },
             completed: {
                 count: this.completedTasksCount
-                //Number(this.#$('#ctl00_MainContent_lkbtnCompleted h3').text()),
             },
             expired: {
                 count: this.expiredTasksCount
-                //Number(this.#$('#ctl00_MainContent_lkbtnExpired h3').text()),
             },
             upcoming: {
                 count: this.upcomingTasksCount
-                //Number(this.#$('#ctl00_MainContent_lkbtnUpcomming h3').text()),
             },
             favorites: {
                 count: this.favoriteTasksCount
-                //Number(this.#$('#ctl00_MainContent_lkbtnFavorites h3').text()),
             },
             // Upper navigation bar -> Report Book, Announcements, Messages
             reportBook: { 
                 count: this.reportBookCount
-                //Number(this.#$('.spanReportBookCount').text()?.slice(1, -1)) || 0
             },
             announcements: {
                 count: this.announcementsCount
-                //Number(this.#$('.spanMsgCount').text()?.slice(1, -1)) || 0
             },
             messages: {
                 count: this.messagesCount
-                //Number(this.#$('.spanEdupostCount').text()?.slice(1, -1)) || 0
             },
         }
     }
 
+    /* function - getCurrentTasks(pagenum: number = 1)
+     * pagenum: number - the specified page number for the current tasks (automatically grabs 1st page)
+     * if no parameter is specified defaults to pagenum=1
+     */
+    async getCurrentTasks(pagenum = 1) {
+        // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
+        // This is done in order to get the maximum # of pages
+        if (!this.currentTasksCount) {
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
+            this.#scrapeTotalTasksCount() // This will get 'this.completedTasksCount'
+        }
+        
+        // Checks if pagenum is not within range
+        // If for instance, the completed tasks are less than 10 most likely when 4 or below, then just make 'Math.round(this.completedTasksCount)' equal to 1
+        if (!(pagenum >= 1 && pagenum <= Math.round(this.currentTasksCount/10) || 1)) { //[1, maxPage]
+            throw new Error(`Page number is not within range! - Range is between [1, ${Math.round(this.currentTasksCount/10)}]`)
+        } 
+        if (pagenum != 1) {
+            let currentTasksResponse = await this.client.post('/Genyolm009/Task/TK_NTasksGrid.aspx',
+                new URLSearchParams({
+                    '__EVENTTARGET': 'ctl00$MainContent$pager2',
+                    '__EVENTARGUMENT': pagenum,
+                })
+            )
+            if (currentTasksResponse.status != 200) {
+                throw new Error(`Failed to request completed tasks! - STATUS ${currentTasksResponse.status}`)
+            }
+            this.#$ = cheerio.load(currentTasksResponse.data) 
+        }
+        return {
+            page: pagenum,
+            list: this.#$('div.card-body.p-2').map((_, el) => {
+                return {
+                    type: (this.#$(el).find('p.text-muted span').text()).trim(),
+                    subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
+                    title: this.#$(el).find('b.tasktakelinkblock a').text().replace(/\n/g, ''), // Get rid of new lines
+                    link: (this.#$(el).find('b.tasktakelinkblock a').attr('href')).replace(/\n/g, ''),
+                    // completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
+                    from: {
+                        teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
+                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                    } 
+                }
+            }).get(),
+            // Max number of pages, say for instance 201 tasks, this means 201/10 = 20.1, round it up then you 20 pages
+            numOfPages: Math.round(this.currentTasksResponse/10) || 1
+        }
+    }
+
+    async getAllCurrentTasks() {
+        let result = [], requests = []
+
+        if (!this.currentTasksCount) {
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
+            this.#scrapeTotalTasksCount() 
+        }
+        let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksGrid.aspx', (Math.round(this.currentTasksCount/10) || 1))
+        result = responses.map(items => {
+            this.#$ = cheerio.load(items.data)
+            return {
+                page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
+                list: this.#$('div.card-body.p-2').map((_, el) => {
+                    return {
+                        type: (this.#$(el).find('p.text-muted span').text()).trim(),
+                        subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
+                        title: this.#$(el).find('b.tasktakelinkblock a').text().replace(/\n/g, ''), // Get rid of new lines
+                        link: (this.#$(el).find('b.tasktakelinkblock a').attr('href')).replace(/\n/g, ''),
+                        // completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
+                        from: {
+                            teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        } 
+                    }
+                }).get(),
+            }
+        })
+        return result
+    }
     /* function - getCompletedTasks(pagenum: number = 1)
      * pagenum: number - the specified page number for the completed tasks (automatically grabs 1st page)
      * if no parameter is specified defaults to pagenum=1
@@ -168,7 +259,6 @@ class Genyo {
         // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
         // This is done in order to get the maximum # of pages
         if (!this.completedTasksCount) {
-            console.log("Trying to find out completed tasks - null")
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx')
             this.#$ = cheerio.load(temp.data)
             this.#scrapeTotalTasksCount() // This will get 'this.completedTasksCount'
@@ -179,7 +269,7 @@ class Genyo {
         if (!(pagenum >= 1 && pagenum <= Math.round(this.completedTasksCount/10) || 1)) { //[1, maxPage]
             throw new Error(`Page number is not within range! - Range is between [1, ${Math.round(this.completedTasksCount/10)}]`)
         } 
-        if (pagenum != 1 || pagenum != undefined) {
+        if (pagenum != 1) {
             let completedTasksResponse = await this.client.post('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx',
                 new URLSearchParams({
                     '__EVENTTARGET': 'ctl00$MainContent$pager2',
@@ -212,26 +302,18 @@ class Genyo {
     }
      
     async getAllCompletedTasks() {
-        let result = []
-        // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
-        // This is done in order to get the maximum # of pages
+        let result = [], requests = []
+
         if (!this.completedTasksCount) {
-            // console.log("Trying to find out completed tasks - null")
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount() // This will get 'this.completedTasksCount'
+            this.#scrapeTotalTasksCount() 
         }
-        for (let i = 1; i <= Math.round(this.completedTasksCount/10); i++) {
-            let completedTasksResponse = await this.client.post('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx',
-                new URLSearchParams({
-                    '__EVENTTARGET': 'ctl00$MainContent$pager2',
-                    '__EVENTARGUMENT': i,
-                })
-            )
-            this.#$ = cheerio.load(completedTasksResponse.data) 
-
-            result.push({
-                page: i,
+        let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx', (Math.round(this.completedTasksCount/10) || 1))
+        result = responses.map(items => {
+            this.#$ = cheerio.load(items.data)
+            return {
+                page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
                 list: this.#$('div.card-body.p-2').map((_, el) => {
                     return {
                         type: (this.#$(el).find('p.text-muted span').text()).trim(),
@@ -245,8 +327,8 @@ class Genyo {
                         } 
                     }
                 }).get(),
-            })
-        }
+            }
+        })
         return result
     }
     
@@ -267,7 +349,7 @@ class Genyo {
         if (!(pagenum >= 1 && pagenum <= Math.round(this.expiredTasksCount/10) || 1)) { //[1, maxPage]
             throw new Error(`Page number is not within range! - Range is between [1, ${Math.round(this.completedTasksCount/10)}]`)
         } 
-        if (pagenum != 1 || pagenum != undefined) {
+        if (pagenum != 1) {
             let expiredTasksResponse = await this.client.post('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx',
                 new URLSearchParams({
                     '__EVENTTARGET': 'ctl00$MainContent$pager2',
@@ -286,7 +368,6 @@ class Genyo {
                     type: (this.#$(el).find('p.text-muted span').text()).trim(),
                     subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                     title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
-                    // link: (this.#$(el).find('b.tasktakelinkblock a').attr('href')).replace(/\n/g, ''),
                     expiryAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                     from: {
                         teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
@@ -297,6 +378,37 @@ class Genyo {
             // Max number of pages, say for instance 201 tasks, this means 201/10 = 20.1, round it up then you 20 pages
             numOfPages: Math.round(this.expiredTasksCount/10) || 1
         }
+    }
+
+    async getAllExpiredTasks() {
+        let result = [], requests = []
+
+        if (!this.expiredTasksCount) {
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
+            this.#scrapeTotalTasksCount()
+        }
+        let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx', (Math.round(this.expiredTasksCount/10) || 1))
+        result = responses.map(items => {
+            this.#$ = cheerio.load(items.data)
+            return {
+                page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
+                list: this.#$('div.card-body.p-2').map((_, el) => {
+                    return {
+                        type: (this.#$(el).find('p.text-muted span').text()).trim(),
+                        subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
+                        title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
+                        completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
+                        from: {
+                            teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        } 
+                    }
+                }).get(),
+            }
+
+        })
+        return result
     }
 
     async getUpcomingTasks(pagenum = 1) {
@@ -312,7 +424,7 @@ class Genyo {
         if (!(pagenum >= 1 && pagenum <= Math.round(this.upcomingTasksCount/10) || 1)) { //[1, maxPage]
             throw new Error(`Page number is not within range! - Range is between [1, ${Math.round(this.upcomingTasksCount/10)}]`)
         } 
-        if (pagenum != 1 || pagenum != undefined) {
+        if (pagenum != 1) {
             let upcomingTasksResponse = await this.client.post('/Genyolm009/Task/TK_NTasksFutureGrid.aspx',
                 new URLSearchParams({
                     '__EVENTTARGET': 'ctl00$MainContent$pager2',
@@ -345,6 +457,38 @@ class Genyo {
         }
     }
 
+    async getAllUpcomingTasks() {
+        let result = [], requests = []
+
+        if (!this.upcomingTasksCount) {
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFutureGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
+            this.#scrapeTotalTasksCount()
+        }
+        let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksFutureGrid.aspx', (Math.round(this.upcomingTasksCount/10) || 1))
+        result = responses.map(items => {
+            this.#$ = cheerio.load(items.data)
+            return {
+                page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
+                list: this.#$('div.card-body.p-2').map((_, el) => {
+                    return {
+                        type: (this.#$(el).find('p.text-muted span').text()).trim(),
+                        subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
+                        title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
+                        expiryAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
+                        availableAt: this.#$(el).next().find('div.col-10 p').text(),
+                        from: {
+                            teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        }
+                    }
+                }).get()
+            }
+
+        })
+        return result
+    }
+
     async getFavoriteTasks(pagenum = 1) {
         // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
         // This is done in order to get the maximum # of pages
@@ -358,7 +502,7 @@ class Genyo {
         if (!(pagenum >= 1 && pagenum <= Math.round(this.favoriteTasksCount/10) || 1)) { //[1, maxPage]
             throw new Error(`Page number is not within range! - Range is between [1, ${Math.round(this.favoriteTasksCount/10)}]`)
         } 
-        if (pagenum != 1 || pagenum != undefined) {
+        if (pagenum != 1) {
             let favoriteTasksResponse = await this.client.post('/Genyolm009/Task/TK_NTasksFavGrid.aspx',
                 new URLSearchParams({
                     '__EVENTTARGET': 'ctl00$MainContent$pager2',
@@ -377,8 +521,8 @@ class Genyo {
                     type: (this.#$(el).find('p.text-muted span').text()).trim(),
                     subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                     title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
-                    // link: (this.#$(el).find('b.tasktakelinkblock a').attr('href')).replace(/\n/g, ''),
-                    // expiryAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
+                    link: (this.#$(el).find('b.tasktakelinkblock a').attr('href')).replace(/\n/g, ''),
+                    expiryAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                     from: {
                         teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
                         href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
@@ -390,6 +534,39 @@ class Genyo {
         }
     }
 
+    async getAllFavoriteTasks() {
+        let result = [], requests = []
+
+        if (!this.favoriteTasksCount) {
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFavGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
+            this.#scrapeTotalTasksCount()
+        }
+
+        let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksFavGrid.aspx', (Math.round(this.favoriteTasksCount/10) || 1))
+        result = responses.map(items => {
+            this.#$ = cheerio.load(items.data)
+            return {
+                page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
+                list: this.#$('div.card-body.p-2').map((_, el) => {
+                    return {
+                        type: (this.#$(el).find('p.text-muted span').text()).trim(),
+                        subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
+                        title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
+                        link: (this.#$(el).find('b.tasktakelinkblock a').attr('href')).replace(/\n/g, ''),
+                        expiryAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
+                        from: {
+                            teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        } 
+                    }
+                }).get()
+            }
+        })
+        return result
+    }
+    
+    
     // TODO: Sending/Reading messages, announcements, profile pictures, "completed users"...
     
     // Warning: EXPERIMENTAL!
