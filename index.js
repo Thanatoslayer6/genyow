@@ -12,6 +12,7 @@ class Genyo {
     // Private variables for username and password
     #userid; 
     #password; 
+    #epuid; // Needed payload for getting announcements
 
     constructor(userid, password) {
         this.currentTasksCount = null;
@@ -75,8 +76,8 @@ class Genyo {
         console.log(`Successfully logged in as: ${this.#$('#spUserName').text()}`)
     }
 
-    // Scrapes total tasks count of 'completed', 'expired', 'upcoming', 'favorite' from html 
-    #scrapeTotalTasksCount() {
+    // Scrapes total tasks count of 'completed', 'expired', 'upcoming', 'favorite' from html and epuid
+    #scrapeBasicInfo() {
         if (!this.currentTasksCount) {
             this.currentTasksCount = Number(this.#$('#ctl00_MainContent_lkbtncurrent h3').text())
         }
@@ -101,6 +102,9 @@ class Genyo {
         }
         if (!this.messagesCount) {
             this.messagesCount = Number(this.#$('.spanEdupostCount').text()?.slice(1, -1)) || 0
+        }
+        if (!this.#epuid) {
+            this.#epuid = this.#$('.hidEPuid').text()
         }
     }
     
@@ -128,7 +132,7 @@ class Genyo {
             // this.homepageHTMLResponse = homepageResponse.data 
         this.#$ = cheerio.load(homepageResponse.data)
         // Assign the count of completed tasks, expired tasks, upcoming tasks, and such
-        this.#scrapeTotalTasksCount()
+        this.#scrapeBasicInfo()
         // Return json data with the following information
         return {
             current: {
@@ -181,7 +185,7 @@ class Genyo {
         if (!this.currentTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount() // This will get 'this.completedTasksCount'
+            this.#scrapeBasicInfo() // This will get 'this.completedTasksCount'
         }
         
         // Checks if pagenum is not within range
@@ -227,7 +231,7 @@ class Genyo {
         if (!this.currentTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount() 
+            this.#scrapeBasicInfo() 
         }
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksGrid.aspx', (Math.round(this.currentTasksCount/10) || 1))
         result = responses.map(items => {
@@ -261,7 +265,7 @@ class Genyo {
         if (!this.completedTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount() // This will get 'this.completedTasksCount'
+            this.#scrapeBasicInfo() // This will get 'this.completedTasksCount'
         }
         
         // Checks if pagenum is not within range
@@ -307,7 +311,7 @@ class Genyo {
         if (!this.completedTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount() 
+            this.#scrapeBasicInfo() 
         }
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx', (Math.round(this.completedTasksCount/10) || 1))
         result = responses.map(items => {
@@ -342,7 +346,7 @@ class Genyo {
         if (!this.expiredTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount()
+            this.#scrapeBasicInfo()
         }
         
         // Checks if pagenum is not within range
@@ -386,7 +390,7 @@ class Genyo {
         if (!this.expiredTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount()
+            this.#scrapeBasicInfo()
         }
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx', (Math.round(this.expiredTasksCount/10) || 1))
         result = responses.map(items => {
@@ -417,7 +421,7 @@ class Genyo {
         if (!this.upcomingTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFutureGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount()
+            this.#scrapeBasicInfo()
         }
         // let maxPage = Math.round(this.upcomingTasksCount/10) 
         // Checks if pagenum is not within range
@@ -463,7 +467,7 @@ class Genyo {
         if (!this.upcomingTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFutureGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount()
+            this.#scrapeBasicInfo()
         }
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksFutureGrid.aspx', (Math.round(this.upcomingTasksCount/10) || 1))
         result = responses.map(items => {
@@ -495,7 +499,7 @@ class Genyo {
         if (!this.favoriteTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFavGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount()
+            this.#scrapeBasicInfo()
         }
         // let maxPage = Math.round(this.upcomingTasksCount/10) 
         // Checks if pagenum is not within range
@@ -540,7 +544,7 @@ class Genyo {
         if (!this.favoriteTasksCount) {
             let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFavGrid.aspx')
             this.#$ = cheerio.load(temp.data)
-            this.#scrapeTotalTasksCount()
+            this.#scrapeBasicInfo()
         }
 
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksFavGrid.aspx', (Math.round(this.favoriteTasksCount/10) || 1))
@@ -565,10 +569,16 @@ class Genyo {
         })
         return result
     }
-    
-    
+        
     // TODO: Sending/Reading messages, announcements, profile pictures, "completed users"...
-    
+    async getAnnouncements() {
+        if (!this.epuid) { // Just scrape directly from the announcements page
+            let temp = await this.client.get('/Genyolm009/Message/MSG_NViewGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
+        }
+        // To be continued hehe
+    }
+
     // Warning: EXPERIMENTAL!
     async AddToCompletedTask(moduleTypeId, moduleId) {
         let info = await this.client.post('/Genyolm009/Webservice/Task/TaskWebService.asmx/MT_Completed_Insert', {
