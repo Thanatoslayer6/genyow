@@ -11,16 +11,16 @@ require('dotenv').config();
     // console.log(acc)
 
     // Get current tasks (page 1)
-    let ctasks = await acc.getCurrentTasks()
-    console.log(ctasks)
+    // let ctasks = await acc.getCurrentTasks()
+    // console.log(ctasks)
 
     // Get completed tasks (page 1)
-    let comptasks = await acc.getCompletedTasks()
-    console.log(comptasks)
+    // let comptasks = await acc.getCompletedTasks()
+    // console.log(comptasks)
 
     // Get expired tasks (page 1)
-    let etasks = await acc.getExpiredTasks()
-    console.log(etasks)
+    // let etasks = await acc.getExpiredTasks()
+    // console.log(etasks)
     
     // Get all completed tasks
     // let ctasks = await acc.getAllCompletedTasks()
@@ -37,4 +37,12 @@ require('dotenv').config();
     // Get all favorite tasks
     // let etasks = await acc.getAllFavoriteTasks()
     // console.log(etasks[0])
+
+    // Get unread announcements:
+    // let unread = await acc.getUnreadAnnouncements()
+    // console.log(unread)
+
+    // Get read announcements
+    let read = await acc.getReadAnnouncements()
+    console.log(read)
 })()

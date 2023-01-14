@@ -12,7 +12,6 @@ class Genyo {
     // Private variables for username and password
     #userid; 
     #password; 
-    #epuid; // Needed payload for getting announcements
 
     constructor(userid, password) {
         this.currentTasksCount = null;
@@ -20,7 +19,7 @@ class Genyo {
         this.expiredTasksCount = null;
         this.upcomingTasksCount = null;
         this.favoriteTasksCount = null;
-
+        this.epuid = null; // Needed payload for getting announcements
         // Get possible number of pages for current tasks, completed tasks, and such
         this.client = wrapper(axios.create({
             baseURL: "https://idiwa.com.ph",
@@ -112,8 +111,8 @@ class Genyo {
         if (!this.messagesCount) {
             this.messagesCount = Number(this.#$('.spanEdupostCount').text()?.slice(1, -1)) || 0
         }
-        if (!this.#epuid) {
-            this.#epuid = this.#$('.hidEPuid').text()
+        if (!this.epuid) {
+            this.epuid = this.#$('.hidEPuid').attr('value');
         }
     }
     
@@ -545,11 +544,50 @@ class Genyo {
     }
         
     // TODO: Sending/Reading messages, announcements, profile pictures, "completed users"...
-    async getAnnouncements() {
-        if (!this.#epuid) { // Just scrape directly from the announcements page
-            let temp = await this.client.get('/Genyolm009/Message/MSG_NViewGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-        }
+
+    // async getAnnouncements() { // Gets unread and all announcements
+    //     let temp = await this.client.get('/Genyolm009/Message/MSG_NViewGrid.aspx')
+    //     this.#$ = cheerio.load(temp.data)
+    // }
+
+    // https://idiwa.com.ph/Genyolm009/mobile/MBL_Main.aspx
+    async getUnreadAnnouncements() {
+        let response = await this.client.post('/Genyolm009/Webservice/Message/MSGWebService.asmx/SelectMsgForSchoolOnlyUnread', {})
+        let result = response.data?.d.map(item => {
+            return {
+                id: item.ID,
+                title: item.Title,
+                createdBy: item.PP_UserName,
+                createdAt: new Date(parseInt((item.CreateOn).substr(6))).toString(),
+                expirationAt: new Date(parseInt((item.EndDate).substr(6))).toString(),
+                message: item.Message,
+                attachment: item.Attachment,
+                creatorPuid: item.CreatorPUID,
+                creatorAvatar: item.CreatorAvatar,
+                views: item.Views,
+            }
+        })
+        return result
+    }
+
+
+    async getReadAnnouncements() {
+        let response = await this.client.post('/Genyolm009/Webservice/Message/MSGWebService.asmx/SelectMsgForSchoolOnly', {})
+        let result = response.data?.d.map(item => {
+            return {
+                id: item.ID,
+                title: item.Title,
+                createdBy: item.PP_UserName,
+                createdAt: new Date(parseInt((item.CreateOn).substr(6))).toString(),
+                expirationAt: new Date(parseInt((item.EndDate).substr(6))).toString(),
+                message: item.Message,
+                attachment: item.Attachment,
+                creatorPuid: item.CreatorPUID,
+                creatorAvatar: item.CreatorAvatar,
+                views: item.Views,
+            }
+        })
+        return result
     }
 
     async markTaskAsCompleted() {
