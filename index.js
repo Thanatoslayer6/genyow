@@ -74,6 +74,15 @@ class Genyo {
         }
         this.#$ = cheerio.load(loginResponse.data)
         console.log(`Successfully logged in as: ${this.#$('#spUserName').text()}`)
+
+        // 3rd Request [GET] # This is done to automatically grab all needed information for scraping basic info like tasks count, etc...
+        let homepageResponse = await this.client.get("/Genyolm009/Task/TK_NTasksGrid.aspx")
+        if (homepageResponse.status != 200) {
+            throw new Error(`Failed to request homepage! - STATUS ${homepageResponse.status}`)
+        }
+        this.#$ = cheerio.load(homepageResponse.data)
+        // Assign the count of completed tasks, expired tasks, upcoming tasks, and such
+        this.#scrapeBasicInfo()
     }
 
     // Scrapes total tasks count of 'completed', 'expired', 'upcoming', 'favorite' from html and epuid
@@ -123,13 +132,12 @@ class Genyo {
         return await Promise.all(requests) // Return the results -> '?.data' for html
     }
 
-    async getHomepage() {
+    async getHomepage() { // This method is created just incase authentication by requesting the homepage fails...
         // Endpoint is the same as current tasks
         let homepageResponse = await this.client.get("/Genyolm009/Task/TK_NTasksGrid.aspx")
         if (homepageResponse.status != 200) {
             throw new Error(`Failed to request homepage! - STATUS ${homepageResponse.status}`)
         }
-            // this.homepageHTMLResponse = homepageResponse.data 
         this.#$ = cheerio.load(homepageResponse.data)
         // Assign the count of completed tasks, expired tasks, upcoming tasks, and such
         this.#scrapeBasicInfo()
@@ -139,6 +147,8 @@ class Genyo {
                 count: Number(this.#$('#ctl00_MainContent_lkbtncurrent h3').text()),
                 list:  this.#$('div.card-body.p-2').map((_, el) => {
                     return {
+                        moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                        moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                         type: (this.#$(el).find('a.text-muted').text()).trim(),
                         title: this.#$(el).find('div.col-10 h5 a').text(),
                         link: (this.#$(el).find('div.col-10 h5 a').attr('href')).replace(/\n/g, ''),
@@ -180,14 +190,6 @@ class Genyo {
      * if no parameter is specified defaults to pagenum=1
      */
     async getCurrentTasks(pagenum = 1) {
-        // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
-        // This is done in order to get the maximum # of pages
-        if (!this.currentTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo() // This will get 'this.completedTasksCount'
-        }
-        
         // Checks if pagenum is not within range
         // If for instance, the completed tasks are less than 10 most likely when 4 or below, then just make 'Math.round(this.completedTasksCount)' equal to 1
         if (!(pagenum >= 1 && pagenum <= Math.round(this.currentTasksCount/10) || 1)) { //[1, maxPage]
@@ -204,13 +206,18 @@ class Genyo {
                 throw new Error(`Failed to request completed tasks! - STATUS ${currentTasksResponse.status}`)
             }
             this.#$ = cheerio.load(currentTasksResponse.data) 
+        } else if (pagenum == 1) { // Just perform get request
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
         }
         return {
             page: pagenum,
             list: this.#$('div.card-body.p-2').map((_, el) => {
                 return {
-                    type: (this.#$(el).find('p.text-muted span').text()).trim(),
-                    subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
+                    moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                    moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
+                    type: (this.#$(el).find('p.text-muted span').text()).trim() || (this.#$(el).find('a.text-muted').text()).trim(),
+                    subject: (this.#$(el).find('p.text-muted').text()).trim(),
                     title: this.#$(el).find('b.tasktakelinkblock a').text().replace(/\n/g, ''), // Get rid of new lines
                     link: (this.#$(el).find('b.tasktakelinkblock a').attr('href')).replace(/\n/g, ''),
                     // completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
@@ -226,13 +233,7 @@ class Genyo {
     }
 
     async getAllCurrentTasks() {
-        let result = [], requests = []
-
-        if (!this.currentTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo() 
-        }
+        let result = []
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksGrid.aspx', (Math.round(this.currentTasksCount/10) || 1))
         result = responses.map(items => {
             this.#$ = cheerio.load(items.data)
@@ -240,8 +241,10 @@ class Genyo {
                 page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
                 list: this.#$('div.card-body.p-2').map((_, el) => {
                     return {
-                        type: (this.#$(el).find('p.text-muted span').text()).trim(),
-                        subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
+                        moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                        moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
+                        type: (this.#$(el).find('p.text-muted span').text()).trim() || (this.#$(el).find('a.text-muted').text()).trim(),
+                        subject: (this.#$(el).find('p.text-muted').text()).trim(),
                         title: this.#$(el).find('b.tasktakelinkblock a').text().replace(/\n/g, ''), // Get rid of new lines
                         link: (this.#$(el).find('b.tasktakelinkblock a').attr('href')).replace(/\n/g, ''),
                         // completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
@@ -260,14 +263,6 @@ class Genyo {
      * if no parameter is specified defaults to pagenum=1
      */
     async getCompletedTasks(pagenum = 1) {
-        // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
-        // This is done in order to get the maximum # of pages
-        if (!this.completedTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo() // This will get 'this.completedTasksCount'
-        }
-        
         // Checks if pagenum is not within range
         // If for instance, the completed tasks are less than 10 most likely when 4 or below, then just make 'Math.round(this.completedTasksCount)' equal to 1
         if (!(pagenum >= 1 && pagenum <= Math.round(this.completedTasksCount/10) || 1)) { //[1, maxPage]
@@ -284,11 +279,16 @@ class Genyo {
                 throw new Error(`Failed to request completed tasks! - STATUS ${completedTasksResponse.status}`)
             }
             this.#$ = cheerio.load(completedTasksResponse.data) 
+        } else if (pagenum == 1) { // Just perform get request
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
         }
         return {
             page: pagenum,
             list: this.#$('div.card-body.p-2').map((_, el) => {
                 return {
+                    moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                    moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                     type: (this.#$(el).find('p.text-muted span').text()).trim(),
                     subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                     title: this.#$(el).find('b.tasktakelinkblock a').text().replace(/\n/g, ''), // Get rid of new lines
@@ -306,13 +306,7 @@ class Genyo {
     }
      
     async getAllCompletedTasks() {
-        let result = [], requests = []
-
-        if (!this.completedTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo() 
-        }
+        let result = []
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksHistoryGrid.aspx', (Math.round(this.completedTasksCount/10) || 1))
         result = responses.map(items => {
             this.#$ = cheerio.load(items.data)
@@ -320,6 +314,8 @@ class Genyo {
                 page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
                 list: this.#$('div.card-body.p-2').map((_, el) => {
                     return {
+                        moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                        moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                         type: (this.#$(el).find('p.text-muted span').text()).trim(),
                         subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                         title: this.#$(el).find('b.tasktakelinkblock a').text().replace(/\n/g, ''), // Get rid of new lines
@@ -341,14 +337,6 @@ class Genyo {
      * if no parameter is specified defaults to pagenum=1
      */
     async getExpiredTasks(pagenum = 1) {
-        // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
-        // This is done in order to get the maximum # of pages
-        if (!this.expiredTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo()
-        }
-        
         // Checks if pagenum is not within range
         if (!(pagenum >= 1 && pagenum <= Math.round(this.expiredTasksCount/10) || 1)) { //[1, maxPage]
             throw new Error(`Page number is not within range! - Range is between [1, ${Math.round(this.completedTasksCount/10)}]`)
@@ -364,11 +352,16 @@ class Genyo {
                 throw new Error(`Failed to request expired tasks! - STATUS ${expiredTasksCount.status}`)
             }
             this.#$ = cheerio.load(expiredTasksResponse.data) 
+        } else if (pagenum == 1) { // Just perform get request
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
         }
         return {
             page: pagenum,
             list: this.#$('div.card-body.p-2').map((_, el) => {
                 return {
+                    moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                    moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                     type: (this.#$(el).find('p.text-muted span').text()).trim(),
                     subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                     title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
@@ -385,13 +378,7 @@ class Genyo {
     }
 
     async getAllExpiredTasks() {
-        let result = [], requests = []
-
-        if (!this.expiredTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo()
-        }
+        let result = []
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksExpiredGrid.aspx', (Math.round(this.expiredTasksCount/10) || 1))
         result = responses.map(items => {
             this.#$ = cheerio.load(items.data)
@@ -399,6 +386,8 @@ class Genyo {
                 page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
                 list: this.#$('div.card-body.p-2').map((_, el) => {
                     return {
+                        moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                        moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                         type: (this.#$(el).find('p.text-muted span').text()).trim(),
                         subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                         title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
@@ -416,14 +405,6 @@ class Genyo {
     }
 
     async getUpcomingTasks(pagenum = 1) {
-        // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
-        // This is done in order to get the maximum # of pages
-        if (!this.upcomingTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFutureGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo()
-        }
-        // let maxPage = Math.round(this.upcomingTasksCount/10) 
         // Checks if pagenum is not within range
         if (!(pagenum >= 1 && pagenum <= Math.round(this.upcomingTasksCount/10) || 1)) { //[1, maxPage]
             throw new Error(`Page number is not within range! - Range is between [1, ${Math.round(this.upcomingTasksCount/10)}]`)
@@ -439,11 +420,16 @@ class Genyo {
                 throw new Error(`Failed to request upcoming tasks! - STATUS ${upcomingTasksResponse.status}`)
             }
             this.#$ = cheerio.load(upcomingTasksResponse.data) 
+        } else if (pagenum == 1) {
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFutureGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
         }
         return {
             page: pagenum,
             list: this.#$('div.card-body.p-2').map((_, el) => {
                 return {
+                    moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                    moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                     type: (this.#$(el).find('p.text-muted span').text()).trim(),
                     subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                     title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
@@ -462,13 +448,7 @@ class Genyo {
     }
 
     async getAllUpcomingTasks() {
-        let result = [], requests = []
-
-        if (!this.upcomingTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFutureGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo()
-        }
+        let result = []
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksFutureGrid.aspx', (Math.round(this.upcomingTasksCount/10) || 1))
         result = responses.map(items => {
             this.#$ = cheerio.load(items.data)
@@ -476,6 +456,8 @@ class Genyo {
                 page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
                 list: this.#$('div.card-body.p-2').map((_, el) => {
                     return {
+                        moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                        moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                         type: (this.#$(el).find('p.text-muted span').text()).trim(),
                         subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                         title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
@@ -494,14 +476,6 @@ class Genyo {
     }
 
     async getFavoriteTasks(pagenum = 1) {
-        // Scrape the first page for completed tasks if 'this.completedTasksCount' is null || undefined
-        // This is done in order to get the maximum # of pages
-        if (!this.favoriteTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFavGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo()
-        }
-        // let maxPage = Math.round(this.upcomingTasksCount/10) 
         // Checks if pagenum is not within range
         if (!(pagenum >= 1 && pagenum <= Math.round(this.favoriteTasksCount/10) || 1)) { //[1, maxPage]
             throw new Error(`Page number is not within range! - Range is between [1, ${Math.round(this.favoriteTasksCount/10)}]`)
@@ -517,11 +491,16 @@ class Genyo {
                 throw new Error(`Failed to request favorite tasks! - STATUS ${favoriteTasksResponse.status}`)
             }
             this.#$ = cheerio.load(favoriteTasksResponse.data) 
+        } else if (pagenum == 1) {
+            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFavGrid.aspx')
+            this.#$ = cheerio.load(temp.data)
         }
         return {
             page: pagenum,
             list: this.#$('div.card-body.p-2').map((_, el) => {
                 return {
+                    moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                    moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                     type: (this.#$(el).find('p.text-muted span').text()).trim(),
                     subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                     title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
@@ -539,14 +518,7 @@ class Genyo {
     }
 
     async getAllFavoriteTasks() {
-        let result = [], requests = []
-
-        if (!this.favoriteTasksCount) {
-            let temp = await this.client.get('/Genyolm009/Task/TK_NTasksFavGrid.aspx')
-            this.#$ = cheerio.load(temp.data)
-            this.#scrapeBasicInfo()
-        }
-
+        let result = []
         let responses = await this.#concurrentRequests('/Genyolm009/Task/TK_NTasksFavGrid.aspx', (Math.round(this.favoriteTasksCount/10) || 1))
         result = responses.map(items => {
             this.#$ = cheerio.load(items.data)
@@ -554,6 +526,8 @@ class Genyo {
                 page: Number((this.#$('.PagerCurrentPageCell strong').text()).trim()) || 1, // Scrape page num 
                 list: this.#$('div.card-body.p-2').map((_, el) => {
                     return {
+                        moduleType: this.#$(el).find('input.hiddenRowModuleType').attr('value'),
+                        moduleId: this.#$(el).find('input.hiddenRowModuleId').attr('value'),
                         type: (this.#$(el).find('p.text-muted span').text()).trim(),
                         subject: (this.#$(el).find('p.text-muted').contents().first().text()).trim().slice(0, -1),
                         title: this.#$(el).find('b.tasktakelinkblock').text().replace(/\n/g, ''), // Get rid of new lines
@@ -572,11 +546,14 @@ class Genyo {
         
     // TODO: Sending/Reading messages, announcements, profile pictures, "completed users"...
     async getAnnouncements() {
-        if (!this.epuid) { // Just scrape directly from the announcements page
+        if (!this.#epuid) { // Just scrape directly from the announcements page
             let temp = await this.client.get('/Genyolm009/Message/MSG_NViewGrid.aspx')
             this.#$ = cheerio.load(temp.data)
         }
-        // To be continued hehe
+    }
+
+    async markTaskAsCompleted() {
+
     }
 
     // Warning: EXPERIMENTAL!

@@ -5,10 +5,23 @@ require('dotenv').config();
     const acc = new Genyo(process.env.USERID, process.env.PASSWORD);
     await acc.authenticate()
     
-    // Get all current tasks
+    // Get homepage (Not really necessary method, just used when errors happen)
+    // let home = await acc.getHomepage()
+    // console.log(home.current)
+    // console.log(acc)
+
+    // Get current tasks (page 1)
     let ctasks = await acc.getCurrentTasks()
     console.log(ctasks)
 
+    // Get completed tasks (page 1)
+    let comptasks = await acc.getCompletedTasks()
+    console.log(comptasks)
+
+    // Get expired tasks (page 1)
+    let etasks = await acc.getExpiredTasks()
+    console.log(etasks)
+    
     // Get all completed tasks
     // let ctasks = await acc.getAllCompletedTasks()
     // console.log(ctasks)
