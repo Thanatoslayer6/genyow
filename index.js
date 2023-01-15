@@ -154,7 +154,8 @@ class Genyo {
                         expiry: this.#$(el).find('li.medium a.creator-username').first().text(),
                         from: {
                             teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                            defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                         } 
                     }
                 }).get()
@@ -222,7 +223,8 @@ class Genyo {
                     // completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                     from: {
                         teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                        defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                     } 
                 }
             }).get(),
@@ -249,7 +251,8 @@ class Genyo {
                         // completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                         from: {
                             teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                            defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                         } 
                     }
                 }).get(),
@@ -295,7 +298,8 @@ class Genyo {
                     completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                     from: {
                         teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                        defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                     } 
                 }
             }).get(),
@@ -322,7 +326,8 @@ class Genyo {
                         completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                         from: {
                             teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                            defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                         } 
                     }
                 }).get(),
@@ -367,7 +372,8 @@ class Genyo {
                     expiryAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                     from: {
                         teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                        defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                     } 
                 }
             }).get(),
@@ -393,7 +399,8 @@ class Genyo {
                         completedAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                         from: {
                             teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                            defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                         } 
                     }
                 }).get(),
@@ -437,7 +444,8 @@ class Genyo {
                     availableAt: this.#$(el).next().find('div.col-10 p').text(),
                     from: {
                         teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                        defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                     } 
                 }
             }).get(),
@@ -464,7 +472,8 @@ class Genyo {
                         availableAt: this.#$(el).next().find('div.col-10 p').text(),
                         from: {
                             teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                            defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                         }
                     }
                 }).get()
@@ -507,7 +516,8 @@ class Genyo {
                     expiryAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                     from: {
                         teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                        href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                        defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                     } 
                 }
             }).get(),
@@ -534,7 +544,8 @@ class Genyo {
                         expiryAt: this.#$(el).find('li.medium a.creator-username').first().text().trim(),
                         from: {
                             teacher: this.#$(el).find('li.medium a.creator-username').last().text(),
-                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href')
+                            href: this.#$(el).find('li.medium a.creator-username').last().attr('href'),
+                            defaultProfile: "https://idiwa.com.ph" + $(el).find('img').attr('src')
                         } 
                     }
                 }).get()
@@ -551,6 +562,7 @@ class Genyo {
     // }
 
     // https://idiwa.com.ph/Genyolm009/mobile/MBL_Main.aspx
+    // TODO: Investigate endpoint, probably add default profile as well for announcements
     async getUnreadAnnouncements() {
         let response = await this.client.post('/Genyolm009/Webservice/Message/MSGWebService.asmx/SelectMsgForSchoolOnlyUnread', {})
         let result = response.data?.d.map(item => {
